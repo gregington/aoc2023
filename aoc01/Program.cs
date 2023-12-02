@@ -1,7 +1,5 @@
 ﻿using System.Collections.Frozen;
 using System.CommandLine;
-using System.Diagnostics;
-using System.Runtime.Serialization;
 using System.Text.RegularExpressions;
 
 partial class Program
