@@ -12,26 +12,60 @@ public class Program
             description: "Input file path",
             getDefaultValue: () => "input.txt");
 
+        var partOption = new Option<int>(
+            name: "--part",
+            description: "Part 1 or 2",
+            getDefaultValue: () => 1);
+
         var rootCommand = new RootCommand();
         rootCommand.AddOption(inputOption);
+        rootCommand.AddOption(partOption);
 
-        rootCommand.SetHandler(Run, inputOption);
+        rootCommand.SetHandler(Run, inputOption, partOption);
 
         await rootCommand.InvokeAsync(args);
     }
 
-    public static async Task Run(string input)
+    public static async Task Run(string input, int part)
     {
         var limit = new Cubes(12, 13, 14);
         var lines = File.ReadLinesAsync(input);
         var games = await lines.Select(Game.Parse).ToArrayAsync();
 
+        var task = part switch
+        {
+            1 => Part1(games),
+            2 => Part2(games),
+            _ => throw new ArgumentOutOfRangeException(nameof(part))
+        };
+
+        await task;
+    }
+
+    private static Task Part1(IReadOnlyList<Game> games)
+    {
+        var limit = new Cubes(12, 13, 14);
+
         var possibleGames = games.Where(game => game.Draws.All(draw => Possible(draw, limit))).ToArray();
         Console.WriteLine(possibleGames.Sum(game => game.Id));
+        return Task.CompletedTask;
+    }
+
+    private static Task Part2(IReadOnlyList<Game> games)
+    {
+        var minimums = games.Select(game => Minimum(game.Draws)).ToArray();
+        var powers = minimums.Select(minimum => Power(minimum)).ToArray();
+        Console.WriteLine(powers.Sum());
+        return Task.CompletedTask;
     }
 
   private static bool Possible(Cubes cubes, Cubes limit) => 
     cubes.Red <= limit.Red && cubes.Green <= limit.Green && cubes.Blue <= limit.Blue;
+
+    private static Cubes Minimum(IReadOnlyList<Cubes> draws) =>
+        draws.Aggregate((a, b) => new Cubes(Math.Max(a.Red, b.Red), Math.Max(a.Green, b.Green), Math.Max(a.Blue, b.Blue)));
+
+    private static int Power(Cubes cubes) => cubes.Red * cubes.Green * cubes.Blue;
 }
 
 public partial record Game(int Id, IReadOnlyList<Cubes> Draws)
