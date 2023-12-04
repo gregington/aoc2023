@@ -1,5 +1,4 @@
 ﻿using System.CommandLine;
-using System.Text.Json;
 
 public class Program
 {
@@ -56,6 +55,35 @@ public class Program
 
     private static Task Part2(char[][] board)
     {
+        var partNumbers = FindPartNumbers(board);
+        var partNumbersWithNeighbors = partNumbers
+            .Select(pn =>
+            {
+                var neighborPositions = pn.Positions.SelectMany(p => GetNeighborPositions(p, board));
+                return (pn.Value, NeighborPositions: neighborPositions.Distinct().ToArray());
+            });
+
+        var gearLocations = FindGearLocations(board);
+
+        var gearRatios = gearLocations
+            .Select(g =>
+            {
+                var adjacent = partNumbersWithNeighbors
+                    .Where(pn => pn.NeighborPositions.Contains(g))
+                    .ToArray();
+
+                if (adjacent.Length != 2)
+                {
+                    return 0;
+                }
+
+                return adjacent[0].Value * adjacent[1].Value;
+
+            });
+
+        var gearRatioSum = gearRatios.Sum();
+        Console.WriteLine(gearRatioSum);
+
         return Task.CompletedTask;
     }
 
@@ -116,7 +144,7 @@ public class Program
         return [.. partNumbers];
     }
 
-    private static char[] GetNeighbors(Point point, char[][] board)
+    private static Point[] GetNeighborPositions(Point point, char[][] board)
     {
         var possiblePositions = new [] {   
             new Point(point.Row - 1, point.Col - 1),
@@ -129,14 +157,38 @@ public class Program
             new Point(point.Row + 1, point.Col + 1)
         };
 
-        var positions = possiblePositions
+        return possiblePositions
             .Where(x => x.Row >= 0 && x.Row < board.Length)
             .Where(x => x.Col >= 0 && x.Col < board[0].Length)
             .ToArray();
+    }
 
-        return positions
+    private static char[] GetNeighbors(Point point, char[][] board)
+    {
+        return GetNeighborPositions(point, board)
             .Select(x => board[x.Row][x.Col])
             .ToArray();
+    }
+
+    private static Point[] FindGearLocations(char[][] board)
+    {
+        var height = board.Length;
+        var width = board[0].Length;
+
+        List<Point> gearLocations = [];
+
+        for (var row = 0; row < height; row++)
+        {
+            for (var col = 0; col < width; col++)
+            {
+                var c = board[row][col];
+                if (c == '*')
+                {
+                    gearLocations.Add(new Point(row, col));
+                }
+            }
+        }
+        return [.. gearLocations];
     }
 
     private static bool IsSymbol(char c) => c != '.' && !char.IsDigit(c);
