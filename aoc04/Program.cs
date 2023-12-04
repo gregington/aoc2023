@@ -48,13 +48,33 @@ public partial class Program
         return Task.CompletedTask;
     }
 
-    private static Task Part2(IAsyncEnumerable<Card> cards)
+    private static async Task Part2(IAsyncEnumerable<Card> cards)
     {
-        return Task.CompletedTask;
+        var cardDict = await cards.ToDictionaryAsync(x => x.Id, x => x);
+
+        var queue = new Queue<Card>(cardDict.Values.OrderBy(x => x.Id));
+
+        int count = 0;
+        while (queue.Count > 0)
+        {
+            var card = queue.Dequeue();
+            count++;
+
+            var newIds = Enumerable.Range(card.Id + 1, card.Matches.Count)
+                .Where(x => cardDict.ContainsKey(x))
+                .Select(x => cardDict[x]);
+
+            foreach (var newCard in newIds)
+            {
+                queue.Enqueue(newCard);
+            }
+        }
+
+        Console.WriteLine(count);
     }
 }
 
-public partial record Card(int Id, ImmutableHashSet<int> WinningNumbers, ImmutableHashSet<int> Numbers)
+public partial record Card(int Id, ImmutableHashSet<int> WinningNumbers, ImmutableHashSet<int> Numbers, ImmutableHashSet<int> Matches)
 {
     private static StringSplitOptions splitOptions = StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries;
 
@@ -68,14 +88,14 @@ public partial record Card(int Id, ImmutableHashSet<int> WinningNumbers, Immutab
         var id = int.Parse(match.Groups["id"].Value);
         var winningNumbers = match.Groups["winningNumbers"].Value.Split(' ', splitOptions).Select(int.Parse).ToImmutableHashSet();
         var numbers = match.Groups["numbers"].Value.Split(' ', splitOptions).Select(int.Parse).ToImmutableHashSet();
+        var matches = winningNumbers.Intersect(numbers).ToImmutableHashSet();
 
-        return new Card(id, winningNumbers, numbers);
+        return new Card(id, winningNumbers, numbers, matches);
     }
 
     public int Score()
     {
-        var matchingNumbers = WinningNumbers.Intersect(Numbers);
-        var count = matchingNumbers.Count;
+        var count = Matches.Count;
 
         var score = count == 0
             ? 0
