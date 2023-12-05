@@ -50,6 +50,35 @@ public partial class Program
 
     private static Task Part2(long[] seeds, Maps maps)
     {
+        var seedRanges = SeedsToRanges(seeds);
+        var totalLength = seedRanges.Select(r => r.Length).Sum();
+        Console.WriteLine($"Total length: {totalLength}");
+
+        var count = 0L;
+        var min = long.MaxValue;
+
+        foreach (var range in seedRanges)
+        {
+            var start = range.Start;
+            var end = range.Start + range.Length;
+            for (var i = start; i < end; i++)
+            {
+                var location = maps.SeedToLocation(i);
+                if (location < min)
+                {
+                    min = location;
+                }
+                count++;
+
+                if (count % 1_000_000 == 0)
+                {
+                    Console.WriteLine($"Progress: {count} / {totalLength} ({(double)count / totalLength:P}) - Min: {min}");
+                }
+            }
+        }
+
+        Console.WriteLine($"Min location: {min}");
+
         return Task.CompletedTask;
     }
 
@@ -95,6 +124,20 @@ public partial class Program
         return (seeds, new Maps(maps));
     }
 
+    private static (long Start, long Length)[] SeedsToRanges(long[] seeds)
+    {
+        var ranges = new List<(long Start, long Length)>();
+
+        for (int i = 0; i < seeds.Length; i += 2)
+        {
+            var start = seeds[i];
+            var length = seeds[i + 1];
+            ranges.Add((start, length));
+        }
+
+        return [.. ranges];
+    }
+
     [GeneratedRegex(@"^seeds: (?<seeds>[0-9 ]+)$")]
     private static partial Regex SeedsRegex();
 
@@ -107,36 +150,31 @@ public partial class Program
 
 public class Maps
 {
-    private readonly IDictionary<string, Map> maps;
+    private readonly Map[] maps;
 
     public Maps(IEnumerable<Map> maps)
     {
-        this.maps = maps.ToDictionary(m => m.Name);
+        var mapsByName = maps.ToDictionary(m => m.Name);
+
+        this.maps = new Map[]
+        {
+            mapsByName["seed-to-soil"],
+            mapsByName["soil-to-fertilizer"],
+            mapsByName["fertilizer-to-water"],
+            mapsByName["water-to-light"],
+            mapsByName["light-to-temperature"],
+            mapsByName["temperature-to-humidity"],
+            mapsByName["humidity-to-location"],
+        };
     }
-
-    public Map SeedToSoil => maps["seed-to-soil"];
-
-    public Map SoilToFertilizer => maps["soil-to-fertilizer"];
-
-    public Map FertilizerToWater => maps["fertilizer-to-water"];
-
-    public Map WaterToLight => maps["water-to-light"];
-
-    public Map LightToTemperature => maps["light-to-temperature"];
-
-    public Map TemperatureToHumidity => maps["temperature-to-humidity"];
-
-    public Map HumidityToLocation => maps["humidity-to-location"];
 
     public long SeedToLocation(long input)
     {
-        var value = SeedToSoil[input];
-        value = SoilToFertilizer[value];
-        value = FertilizerToWater[value];
-        value = WaterToLight[value];
-        value = LightToTemperature[value];
-        value = TemperatureToHumidity[value];
-        value = HumidityToLocation[value];
+        var value = input;
+        for (var i = 0; i < maps.Length; i++)
+        {
+            value = maps[i][value];
+        }
         return value;
     }
 }
@@ -144,6 +182,7 @@ public class Maps
 public class Map
 {
     private readonly List<RangeMapping> ranges = [];
+    private List<long> sourceStarts = [];
 
     public Map(string name)
     {
@@ -155,18 +194,29 @@ public class Map
     public void AddRange(long destStart, long sourceStart, long length)
     {
         ranges.Add(new RangeMapping(destStart, sourceStart, length));
+        ranges.Sort((a, b) => a.SourceStart.CompareTo(b.SourceStart));
+        sourceStarts = ranges.Select(r => r.SourceStart).ToList();
     }
 
    public long this[long i]
    {
         get 
         {
-            foreach (var range in ranges)
+            var index = sourceStarts.BinarySearch(i);
+            if (index < 0)
             {
-                if (range.Contains(i))
-                {
-                    return range.Map(i);
-                }
+                index = (~index) - 1;
+            }
+
+            if (index == -1)
+            {
+                return i;
+            }
+
+            var range = ranges[index];
+            if (range.Contains(i))
+            {
+                return range.Map(i);
             }
             return i;
         }
