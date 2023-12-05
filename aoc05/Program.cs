@@ -1,4 +1,5 @@
-﻿using System.CommandLine;
+﻿using System.Collections.Concurrent;
+using System.CommandLine;
 using System.CommandLine.Parsing;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
@@ -53,12 +54,15 @@ public partial class Program
         var seedRanges = SeedsToRanges(seeds);
         var totalLength = seedRanges.Select(r => r.Length).Sum();
         Console.WriteLine($"Total length: {totalLength}");
+        Console.WriteLine($"Seed ranges: {seedRanges.Length}");
 
-        var count = 0L;
-        var min = long.MaxValue;
+        var seedRangesCompleted = 0;
 
-        foreach (var range in seedRanges)
+        var mins = new ConcurrentBag<long>();
+
+        Parallel.ForEach(seedRanges, range =>
         {
+            var min = long.MaxValue;
             var start = range.Start;
             var end = range.Start + range.Length;
             for (var i = start; i < end; i++)
@@ -68,14 +72,14 @@ public partial class Program
                 {
                     min = location;
                 }
-                count++;
-
-                if (count % 1_000_000 == 0)
-                {
-                    Console.WriteLine($"Progress: {count} / {totalLength} ({(double)count / totalLength:P}) - Min: {min}");
-                }
             }
-        }
+            
+            mins.Add(min);
+            Interlocked.Increment(ref seedRangesCompleted);
+            Console.WriteLine($"Completed: {seedRangesCompleted}/{seedRanges.Length}");
+        });
+
+        var min = mins.Min();
 
         Console.WriteLine($"Min location: {min}");
 
