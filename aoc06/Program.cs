@@ -31,7 +31,7 @@ public partial class Program
         var task = part switch
         {
             1 => Part1(races),
-            2 => Part2(),
+            2 => Part2(races),
             _ => throw new ArgumentOutOfRangeException(nameof(part))
         };
 
@@ -51,8 +51,20 @@ public partial class Program
         return Task.CompletedTask;
     }
 
-    private static Task Part2()
+    private static Task Part2(IEnumerable<Race> races)
     {
+        var time = Convert.ToInt64(string.Join("", races.Select(race => race.Time.ToString())));
+
+        var distanceRecord = Convert.ToInt64(string.Join("", races.Select(race => race.DistanceRecord.ToString())));
+
+        var race = new Race(time, distanceRecord);
+
+        var waysToWin = Simulate(race)
+            .Where(result => result.Distance > result.Race.DistanceRecord)
+            .Count();
+
+        Console.WriteLine(waysToWin);
+
         return Task.CompletedTask;
     }
 
@@ -73,14 +85,16 @@ public partial class Program
             .ToArray();
     }
 
-    private static Result[] Simulate(Race race)
+    private static IEnumerable<Result> Simulate(Race race)
     {
-        return Enumerable.Range(0, race.Time + 1)
-            .Select(holdTime => Simulate(race, holdTime))
-            .ToArray();
+        var limit = race.Time;
+        for (var i = 0L; i < race.Time + 1; i++)
+        {
+            yield return Simulate(race, i);
+        }
     }
 
-    private static Result Simulate(Race race, int holdTime)
+    private static Result Simulate(Race race, long holdTime)
     {
         var velocity = holdTime;
         var remainingTime = race.Time - holdTime;
@@ -95,6 +109,6 @@ public partial class Program
 
 }
 
-public record Race(int Time, int DistanceRecord);
+public record Race(long Time, long DistanceRecord);
 
-public record Result(Race Race, int HoldTime, int Distance);
+public record Result(Race Race, long HoldTime, long Distance);
