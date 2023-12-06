@@ -2,7 +2,6 @@
 using System.CommandLine;
 using System.CommandLine.Parsing;
 using System.Text.RegularExpressions;
-using System.Threading.Tasks;
 
 public partial class Program
 {
