@@ -1,6 +1,4 @@
-﻿using System;
-using System.Collections.Concurrent;
-using System.CommandLine;
+﻿using System.CommandLine;
 
 public partial class Program
 {
@@ -105,8 +103,6 @@ public partial class Program
         }
         return new Result(race, holdTime, distance);
     }
-
-
 }
 
 public record Race(long Time, long DistanceRecord);
