@@ -1,4 +1,5 @@
-﻿using System.CommandLine;
+﻿using System.Collections.Concurrent;
+using System.CommandLine;
 using System.Security.AccessControl;
 using System.Security.Cryptography.X509Certificates;
 using System.Text.RegularExpressions;
@@ -61,11 +62,55 @@ public partial class Program
         return Task.CompletedTask;
     }
 
-    private static Task Part2(List<Direction> directions, Dictionary<string, Node> Nodes)
+    private static Task Part2(List<Direction> directions, Dictionary<string, Node> nodes)
     {
+        var infiniteDirections = Enumerable.Repeat(directions, int.MaxValue).SelectMany(x => x);
+        var startNodes = nodes.Keys.Where(n => n.EndsWith('A')).ToArray();
+
+        var pathLengthsFromStart = startNodes.ToDictionary(startNode => startNode, startNode => StepsToAnyZNode(directions, nodes, startNode));
+
+        var steps = pathLengthsFromStart.Values
+            .Select(x => x.Steps)
+            .Aggregate(Lcm);
+
+        Console.WriteLine(steps);
+
         return Task.CompletedTask;
     }
 
+    private static long Lcm(long x, long y) => x * y / Gcd(x, y);
+
+    private static long Gcd(long x, long y)
+    {
+        while (y != 0)
+        {
+            var temp = y;
+            y = x % y;
+            x = temp;
+        }
+        return x;
+    }
+
+    private static (string EndNode, long Steps) StepsToAnyZNode(List<Direction> directions, Dictionary<string, Node> nodes, string startNode)
+    {
+        var infiniteDirections = Enumerable.Repeat(directions, int.MaxValue).SelectMany(x => x);
+        var currentNode = startNode;
+        var count = 0L;
+
+        foreach(var direction in infiniteDirections)
+        {
+            if (currentNode.EndsWith('Z'))
+            {
+                break;
+            }
+
+            currentNode = nodes[currentNode][direction];
+            count++;
+        }
+
+        return (currentNode, count);
+    }
+    
     public static async Task<(List<Direction> Directions, Dictionary<string, Node> Nodes)> Parse(string input)
     {
         var lines = await File.ReadAllLinesAsync(input);
@@ -85,7 +130,7 @@ public partial class Program
         return (directions, nodes);
     }
 
-    [GeneratedRegex(@"^(?<node>[A-Z]+) = \((?<left>[A-Z]+), (?<right>[A-Z]+)\)$")]
+    [GeneratedRegex(@"^(?<node>.+) = \((?<left>.+), (?<right>.+)\)$")]
     private static partial Regex NodeRegex();
 }
 
