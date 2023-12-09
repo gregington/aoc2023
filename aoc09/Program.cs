@@ -40,7 +40,7 @@ public partial class Program
     private static Task Part1(IAsyncEnumerable<List<int>> sequences)
     {
         var nextValues = sequences
-            .Select(s => NextValue(s));
+            .Select(NextValue);
 
         Console.WriteLine(nextValues.ToEnumerable().Sum());
 
@@ -49,6 +49,11 @@ public partial class Program
 
     private static Task Part2(IAsyncEnumerable<IList<int>> sequences)
     {
+        var previousValues = sequences
+            .Select(PreviousValue);
+
+        Console.WriteLine(previousValues.ToEnumerable().Sum());
+
         return Task.CompletedTask;
     }
 
@@ -71,6 +76,29 @@ public partial class Program
 
         var lowerSequence = AppendSequence([.. differences]);
         return sequence.Add(sequence[^1] + lowerSequence[^1]);
+    }
+
+    private static int PreviousValue(IList<int> sequence)
+    {
+        return PrependSequence([.. sequence])[0];
+    }
+
+    private static ImmutableArray<int> PrependSequence(ImmutableArray<int> sequence)
+    {
+        if (sequence.All(x => x == 0))
+        {
+            return sequence.Add(0);
+        }
+        var differences = new List<int>();
+
+        for (int i = 1; i < sequence.Length; i++)
+        {
+            differences.Add(sequence[i] - sequence[i - 1]);
+        }
+
+        var lowerSequence = PrependSequence([.. differences]);
+        var value = sequence[0] - lowerSequence[0];
+        return [value, .. sequence];
     }
 
     public static IAsyncEnumerable<List<int>> Parse(string input)
