@@ -14,6 +14,9 @@ public partial class Program
             [Direction.Right] = "-J7".ToFrozenSet()
         }.ToFrozenDictionary();
 
+    // Only use bottom half corners, as we can move though parallel pipes
+    private static FrozenSet<char> VerticalPipes = "|LJ".ToFrozenSet();
+
     public static async Task Main(string[] args)
     {
         var inputOption = new Option<string>(
@@ -81,7 +84,73 @@ public partial class Program
 
     private static Task Part2(char[][] map)
     {
+        var visited = new HashSet<Point>();
+        var start = FindStart(map);
+        var point = start;
+        var startSymbol = InferSymbol(map, point);
+        map[point.Row][point.Col] = startSymbol;
+
+        while (point != null)
+        {
+            visited.Add(point);
+            point = FindAdjacent(map, point)
+                .Where(p => !visited.Contains(p))
+                .FirstOrDefault();
+        }
+
+
+        var filteredMap = FilterMap(map, visited);
+        PrintMap(filteredMap);
+        var nonLoopPoints = FindNonLoopPoints(filteredMap, visited);
+        var insidePoints = FindInsidePoints(filteredMap, nonLoopPoints);
+
+        foreach (var insidePoint in insidePoints)
+        {
+            filteredMap[insidePoint.Row][insidePoint.Col] = 'I';
+        }
+
+        Console.WriteLine("--------");
+
+        PrintMap(filteredMap);
+
+        Console.WriteLine(insidePoints.Count());
         return Task.CompletedTask;
+    }
+
+    private static IEnumerable<Point> FindInsidePoints(char[][] map, IEnumerable<Point> points)
+    {
+        foreach (var point in points)
+        {
+            var row = map[point.Row];
+            var rightIntersectionCount = 0;
+            for (var col = point.Col; col < row.Length; col++)
+            {
+                if (VerticalPipes.Contains(row[col]))
+                {
+                    rightIntersectionCount++;
+                }
+            }
+
+            if (rightIntersectionCount % 2 == 1)
+            {
+                yield return point;
+            }
+        }
+    }
+
+    private static IEnumerable<Point> FindNonLoopPoints(char[][] map, IEnumerable<Point> loop)
+    {
+        for (var row = 0; row < map.Length; row++)
+        {
+            for (var col = 0; col < map[0].Length; col++)
+            {
+                var point = new Point(row, col);
+                if (!loop.Contains(point))
+                {
+                    yield return point;
+                }
+            }
+        }
     }
 
     private static IEnumerable<Point> FindAdjacent(char[][] map, Point point)
