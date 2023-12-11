@@ -50,7 +50,40 @@ public partial class Program
 
     private static Task Part2(char[][] map)
     {
+        var expansionFactor = 1_000_000;
+        var emptyRows = FindEmptyRows(map).Order().ToList();
+        var emptyCols = FindEmptyCols(map).Order().ToList();
+        
+        var galaxies = FindGalaxies(map);
+        var pairs = MakePairs(galaxies);
+
+        var distances = pairs.Select(d => ExpandedManhattanDistance(d.First, d.Second, expansionFactor, emptyRows, emptyCols));
+
+        var distanceSum = distances.Sum();
+
+        Console.WriteLine(distanceSum);
+
         return Task.CompletedTask;
+    }
+
+    private static long ExpandedManhattanDistance(Point first, Point second, long expansionFactor, List<int> emptyRows, List<int> emptyCols)
+    {
+        return ExpandedLinearDistance(first.Row, second.Row, expansionFactor, emptyRows)
+            + ExpandedLinearDistance(first.Col, second.Col, expansionFactor, emptyCols);
+    }
+
+    private static long ExpandedLinearDistance(int first, int second, long expansionFactor, List<int> emptyPositions)
+    {
+        var minPos = Math.Min(first, second);
+        var maxPos = Math.Max(first, second);
+
+        var crossedEmptyPositions = emptyPositions.Where(x => x > minPos && x < maxPos);
+        var crossedPositionsCount = crossedEmptyPositions.Count();
+
+        var baseDistance = maxPos - minPos - crossedPositionsCount;
+        var expandedDistance = crossedPositionsCount * expansionFactor;
+
+        return baseDistance + expandedDistance;
     }
 
     private static int ManhattanDistance(Point a, Point b) => Math.Abs(a.Row - b.Row) + Math.Abs(a.Col - b.Col);
