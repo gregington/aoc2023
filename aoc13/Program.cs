@@ -38,7 +38,11 @@ public partial class Program
 
     private static Task Part1(IAsyncEnumerable<string[]> patterns)
     {
-        var result = patterns.Select(Score).ToEnumerable().Sum();
+        var result = patterns
+            .Select(x => FindReflectionAxis(x, false))
+            .Select(Score)
+            .ToEnumerable()
+            .Sum();
         Console.WriteLine(result);
 
         return Task.CompletedTask;
@@ -46,69 +50,84 @@ public partial class Program
 
     private static Task Part2(IAsyncEnumerable<string[]> patterns)
     {
+        var result = patterns
+            .Select(x => FindReflectionAxis(x, true))
+            .Select(Score)
+            .ToEnumerable()
+            .Sum();
+        Console.WriteLine(result);
+
         return Task.CompletedTask;
     }
 
-    private static int Score(string[] pattern)
+    private static int Score(Axis axis)
+    {
+        return axis.Direction switch
+        {
+            'H' => axis.Index * 100,
+            'V' => axis.Index,
+            _ => throw new Exception("Unknown direction")
+        };
+    }
+
+    public static Axis FindReflectionAxis(string[] pattern, bool smudge)
     {
         // Horizontal reflection
-        var reflectionIndex = FindReflectionIndex(pattern);
+        var reflectionIndex = FindReflectionIndex(pattern, smudge);
         if (reflectionIndex != -1) {
-            return reflectionIndex * 100;
+            return new Axis('H', reflectionIndex);
         }
 
         // Vertical reflection
         var transposed = Transpose(pattern);
-        var transposedReflectionIndex = FindReflectionIndex(transposed);
+        var transposedReflectionIndex = FindReflectionIndex(transposed, smudge);
         if (transposedReflectionIndex == -1) {
-            throw new Exception("Expected reflection in horizonal or vertical axis");
+            return null;
         }
 
-        return transposedReflectionIndex;
+        return new Axis('V', transposedReflectionIndex);
     }
 
-
-    private static int FindReflectionIndex(string[] pattern)
+    private static int FindReflectionIndex(string[] pattern, bool smudge)
     {
-        var equalLines = new List<(int First, int Second)>();
+        var allowedDifferences = smudge ? 1 : 0;
 
-        for (var i = 0; i < pattern.Length; i++)
+        for (var i = 1; i < pattern.Length; i++)
         {
-            for (var j = i + 1; j < pattern.Length; j++)
+            var differences = 0;
+            var lower = i - 1;
+            var upper = i;
+
+            while (lower >= 0 && upper < pattern.Length)
             {
-                if (pattern[i] == pattern[j])
+                differences += CountDifferences(pattern[lower], pattern[upper]);
+
+                if (differences > allowedDifferences)
                 {
-                    equalLines.Add((i, j));
+                    break;
                 }
+                lower--;
+                upper++;
+            }
+            if (differences == allowedDifferences)
+            {
+                return i;
             }
         }
-
-        var reflectionAxis = equalLines
-            .Where(x => x.Second - x.First == 1)
-            .Where(x => IsReflection(pattern, x.First, x.Second))
-            .ToArray();
-
-        if (reflectionAxis.Length != 1)
-        {
-            return -1;
-        }
-
-        return reflectionAxis[0].Second;
+        return -1;
     }
 
-    private static bool IsReflection(string[] pattern, int lower, int upper)
+    private static int CountDifferences(string a, string b)
     {
-        while (lower >= 0 && upper < pattern.Length)
+        var differences = 0;
+        for (var i = 0; i < a.Length; i++)
         {
-            if (pattern[lower] != pattern[upper])
+            if (a[i] != b[i])
             {
-                return false;
+                differences++;
             }
-
-            lower--;
-            upper++;
         }
-        return true;
+        return differences;
     }
 
     private static string[] Transpose(string[] input)
@@ -151,3 +170,5 @@ public partial class Program
         }
     }
 }
+
+public record Axis(char Direction, int Index);
