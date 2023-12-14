@@ -38,7 +38,8 @@ public partial class Program
 
     private static Task Part1(char[][] platform)
     {
-        var (_, load) = TiltPlatform(platform, Direction.North);
+        var tilted = TiltNorth(platform);
+        var load = CalculateLoad(tilted);
 
         Console.WriteLine(load);
 
@@ -47,7 +48,78 @@ public partial class Program
 
     private static Task Part2(char[][] platform)
     {
+        var cycles = 1_000_000_000;
+
+        var (loop, startOffset) = FindLoop(platform);
+
+        var loadAtCycles = loop[(cycles - startOffset) % loop.Count];
+        Console.WriteLine(loadAtCycles);
+
         return Task.CompletedTask;
+    }
+
+    private static (List<int> Loop, int StartOffset) FindLoop(char[][] platform)
+    {
+        var platforms = new Dictionary<string, int>();
+
+        var loads = new List<int>();
+
+
+        var sequence = 0;
+        var stringified = Stringify(platform);
+
+        while (true)
+        {
+            if (platforms.TryGetValue(stringified, out var startLoop))
+            {
+                var loop = loads.Skip(startLoop).ToList();
+                return (loop, startLoop);
+            }
+
+            loads.Add(CalculateLoad(platform));
+            platforms.Add(stringified, sequence++);
+
+            platform = Cycle(platform);
+            stringified = Stringify(platform);
+        }
+    }
+
+    private static string Stringify(char[][] platform)
+    {
+        return string.Join("", platform.SelectMany(x => x));
+    }
+
+    private static bool Equal(char[][] a, char[][] b)
+    {
+        if (a.Length != b.Length)
+        {
+            return false;
+        }
+        for (var i = 0; i < a.Length; i++)
+        {
+            if (a[i].Length != b[i].Length)
+            {
+                return false;
+            }
+            for (var j = 0; j < a[i].Length; j++)
+            {
+                if (a[i][j] != b[i][j])
+                {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    private static char[][] Cycle(char[][] platform)
+    {
+        for (var i = 0; i < 4; i++)
+        {
+            platform = TiltNorth(platform);
+            platform = RotateClockwise(platform);
+        }
+        return platform;
     }
 
     public static char[][] TiltNorth(char[][] input)
@@ -85,36 +157,6 @@ public partial class Program
         } while (moves > 0);
 
         return copy;
-    }
-
-    private static (char[][] Platform, int Load) TiltPlatform(char[][] input, Direction downDirection)
-    {
-        var numRotations = downDirection switch
-        {
-            Direction.North => 0,
-            Direction.West => 1,
-            Direction.South => 2,
-            Direction.East => 3,
-            _ => throw new ArgumentOutOfRangeException(nameof(downDirection))  
-        };
-
-        var rotated = Copy(input);
-
-        for (int i = 0; i < numRotations; i++)
-        {
-            rotated = RotateClockwise(input);
-        }
-
-        var tilted = TiltNorth(rotated);
-        var load = CalculateLoad(tilted);
-
-        var reverseRotations = (4 - numRotations) % 4;
-        for (int i = 0; i < reverseRotations; i++)
-        {
-            tilted = RotateClockwise(tilted);
-        }
-
-        return (tilted, load);
     }
 
     private static int CalculateLoad(char[][] platform)
@@ -173,12 +215,4 @@ public partial class Program
             .Select(x => x.ToCharArray())
             .ToArrayAsync();
     }
-}
-
-public enum Direction
-{
-    North,
-    East,
-    South,
-    West
 }
