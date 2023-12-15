@@ -1,5 +1,6 @@
 ﻿using System.Collections;
 using System.CommandLine;
+using System.Reflection.Emit;
 
 public partial class Program
 {
@@ -46,7 +47,44 @@ public partial class Program
 
     private static Task Part2(IEnumerable<string> initSequence)
     {
+        var boxes = InitBoxes(initSequence);
+
+        var focusingPower = FocusingPower(boxes);
+        Console.WriteLine(focusingPower);
+
         return Task.CompletedTask;
+    }
+
+    private static int FocusingPower(Box[] boxes)
+    {
+        var focusingPower = 0;
+        for (var i = 0; i < boxes.Length; i++)
+        {
+            var box = boxes[i];
+            var boxMultipler = i + 1;
+            for (var j = 0; j < box.Lenses.Count; j++)
+            {
+                var lens = box.Lenses[j];
+                var lensMultiplier = j + 1;
+                focusingPower += boxMultipler * lensMultiplier * lens.FocalLength;
+            }
+        }
+
+        return focusingPower;   
+    }
+
+    private static Box[] InitBoxes(IEnumerable<string> initSequence)
+    {
+        var boxes = Enumerable.Range(0, 256).Select(_ => new Box()).ToArray();
+
+        var operations = initSequence.Select(s => CreateOperation(s))    
+            .Select(op => (Hash: Hash(op.Lens.Label), Operation: op));
+
+        foreach (var (hash, op) in operations)
+        {
+            boxes[hash].Apply(op);
+        }
+        return boxes;
     }
 
     private static int Hash(string input)
@@ -60,8 +98,81 @@ public partial class Program
             });
     }
 
+    private static Operation CreateOperation(string input)
+    {
+        if (input.EndsWith('-'))
+        {
+            return new Operation('-', new Lens(input[0..^1], -1));
+        }
+
+        var x = input.Split('=');
+        return new Operation('=', new Lens(x[0], int.Parse(x[1])));
+    }
+
     private static async Task<IEnumerable<string>> Parse(string input)
     {
         return (await File.ReadAllLinesAsync(input)).First().Split(',');
     }
 }
+
+public class Box
+{
+    public readonly List<Lens> Lenses = new List<Lens>();
+
+    public int Count => Lenses.Count;
+
+    public void Apply(Operation op)
+    {
+        switch (op.Op)
+        {
+            case '=':
+                Add(op.Lens);
+                break;
+            case '-':
+                Remove(op.Lens);
+                break;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(op));
+        }
+    }
+
+    private void Add(Lens lens) {
+        var index = IndexOfLabel(lens.Label);
+
+        if (index != -1)
+        {
+            Lenses[index] = lens;
+            return;
+        }
+
+        Lenses.Add(lens);
+    }
+
+    private void Remove(Lens lens)
+    {
+        var index = IndexOfLabel(lens.Label);
+        
+        if (index == -1)
+        {
+            return;
+        }
+        Lenses.RemoveAt(index);
+    }
+
+    private int IndexOfLabel(string label)
+    {
+        for (var i = 0; i < Lenses.Count; i++)
+        {
+            if (Lenses[i].Label == label)
+            {
+                return i;
+            }
+        }
+
+        return -1;
+    }
+}
+
+public record Lens(string Label, int FocalLength);
+
+public record Operation(char Op, Lens Lens);
