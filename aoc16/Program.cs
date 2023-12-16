@@ -30,7 +30,7 @@ public partial class Program
         var task = part switch
         {
             1 => Part1(tiles),
-            2 => Part2(),
+            2 => Part2(tiles),
             _ => throw new ArgumentOutOfRangeException(nameof(part))
         };
 
@@ -39,20 +39,21 @@ public partial class Program
 
     private static Task Part1(char[][] tiles)
     {
-        var energisedTiles = FindEnergisedTiles(tiles);
-
-        foreach (var point in energisedTiles)
-        {
-            tiles[point.Row][point.Col] = '#';
-        }
+        var startBeam = new Beam(new Point(0, -1), Direction.Right);
+        var energisedTiles = FindEnergisedTiles(tiles, startBeam);
 
         Console.WriteLine(energisedTiles.Count);
 
         return Task.CompletedTask;
     }
 
-    private static Task Part2()
+    private static Task Part2(char[][] tiles)
     {
+        var maxEnergised = StartBeams(tiles)
+            .Select(beam => FindEnergisedTiles(tiles, beam).Count)
+            .Max();
+
+        Console.WriteLine(maxEnergised);
         return Task.CompletedTask;
     }
 
@@ -64,13 +65,30 @@ public partial class Program
         }
     }
 
-    private static HashSet<Point> FindEnergisedTiles(char[][] tiles)
+    private static IEnumerable<Beam> StartBeams(char[][] tiles)
+    {
+        var height = tiles.Length;
+        var width = tiles[0].Length;
+        for (var row = 0; row < height; row++)
+        {
+            yield return new Beam(new Point(row, -1), Direction.Right);
+            yield return new Beam(new Point(row, width), Direction.Left);
+        }
+
+        for (var col = 0; col < width; col++)
+        {
+            yield return new Beam(new Point(-1, col), Direction.Down);
+            yield return new Beam(new Point(height, col), Direction.Up);
+        }
+    }
+
+    private static HashSet<Point> FindEnergisedTiles(char[][] tiles, Beam startBeam)
     {
         var queue = new Queue<Beam>();
         var energised = new HashSet<Point>();
         var seen = new HashSet<Beam>();
 
-        queue.Enqueue(new Beam(new Point(0, -1), Direction.Right));
+        queue.Enqueue(startBeam);
         while (queue.Count > 0)
         {
             var beam = queue.Dequeue();
