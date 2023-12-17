@@ -1,7 +1,4 @@
-﻿using System.Collections.Immutable;
-using System.CommandLine;
-using System.Drawing;
-using System.Security.Cryptography;
+﻿using System.CommandLine;
 
 public partial class Program
 {
@@ -41,158 +38,94 @@ public partial class Program
 
     private static Task Part1(int[][] map)
     {
-        var endPosition = new Position(map.Length - 1, map[0].Length - 1);
-        var queue = new PriorityQueue<State, int>();
-        var seen = new HashSet<SeenKey>();
-
-        foreach (var startingState in StartingStates(map))
-        {
-            queue.Enqueue(startingState, startingState.HeatLoss);
-        }
-
-        var minHeatLoss = int.MaxValue;
-
-        while (queue.Count > 0)
-        {
-            var state = queue.Dequeue();
-            var SeenKey = state.SeenKey;
-
-            if (seen.Contains(SeenKey))
-            {
-                continue;
-            }
-
-            seen.Add(SeenKey);
-
-            if (state.HeatLoss > minHeatLoss)
-            {
-                continue;
-            }
-
-            if (state.Position == endPosition)
-            {
-                minHeatLoss = Math.Min(minHeatLoss, state.HeatLoss);
-                continue;
-            }
-
-            foreach (var nextState in NextStates(map, state))
-            {
-                queue.Enqueue(nextState, nextState.HeatLoss);
-            }
-        }
-
-        Console.WriteLine(minHeatLoss - map[endPosition.Row][endPosition.Col]);
+        var rules = new Rules(
+            CanStop: _ => true,
+            CanTurn: _ => true,
+            CanMoveForward: state => state.DirectionMoves < 3
+        );
+        Console.WriteLine(FindMinimum(map, rules));
 
         return Task.CompletedTask;
     }
 
     private static Task Part2(int[][] map)
     {
+        var rules = new Rules(
+            CanStop: state => state.DirectionMoves >= 4,
+            CanTurn: state => state.DirectionMoves == 0 || state.DirectionMoves >= 4,
+            CanMoveForward: state => state.DirectionMoves < 10
+        );
+        Console.WriteLine(FindMinimum(map, rules));
         return Task.CompletedTask;
     }
 
-    private static IEnumerable<State> NextStates(int[][] map, State state)
-    {
-        return AllowableDirections(state.LastDirection, state.NumDirectionMoves)
-            .SelectMany(x => ValidPositions(x, state.Position, map))
-            .Select(x =>
-            {
-                var numDirectionMoves = x.Direction == state.LastDirection ? state.NumDirectionMoves + 1 : 0;
-                var additionalHeatLoss = map[state.Position.Row][state.Position.Col];
-                return state with
-                {
-                    Position = x.Position,
-                    LastDirection = x.Direction,
-                    NumDirectionMoves = numDirectionMoves,
-                    HeatLoss = state.HeatLoss + additionalHeatLoss,
-                    Path = state.Path.Add((x.Position, x.Direction))
-                };
-            });
-    }
 
-    private static IEnumerable<Direction> AllowableDirections(Direction currentDirection, int numMovesInDirection)
+    public static int FindMinimum(int[][] map, Rules rules)
     {
-        var (left, straight, right) = currentDirection.TurnDirections();
+        var startPos = new Position(0, 0);
+        var endPos = new Position(map.Length - 1, map[0].Length - 1);
 
-        if (numMovesInDirection < 2)
+        var queue = new PriorityQueue<State, int>();
+        var seen = new HashSet<State>();
+        queue.Enqueue(new State(startPos, Direction.Right, 0), 0);
+        queue.Enqueue(new State(startPos, Direction.Down, 0), 0);
+
+        while (queue.TryDequeue(out var state, out var heatLoss))
         {
-            yield return straight;
-        }
-
-        yield return left;
-        yield return right;
-    }
-
-    public static IEnumerable<(Direction Direction, Position Position)> ValidPositions(Direction direction, Position currentPosition, int[][] map)
-    {
-        var newPosition = currentPosition.Move(direction);
-        if (newPosition.Row >= 0 && newPosition.Row < map.Length
-            && newPosition.Col >= 0 && newPosition.Col < map[0].Length)
-        {
-            yield return (direction, newPosition);            
-        }
-    }
-
-    private static IEnumerable<State> StartingStates(int[][] map)
-    {
-        var startStates =  new []
+            if (state.Position == endPos && rules.CanStop(state))
             {
-                (Position: new Position(0, 1), Direction: Direction.Right),
-                (Position: new Position(1, 0), Direction: Direction.Down)
+                return heatLoss;
             }
-            .Select(s => new State(s.Position, s.Direction, 1, map[s.Position.Row][s.Position.Col], [(s.Position, s.Direction)]));
-
-        foreach (var startState in startStates)
-        {
-            yield return startState;
-        }
-    }
-
-    public static void PrintPath(int[][] map, IEnumerable<(Position Position, Direction Direction)> path)
-    {
-        var copy = new char[map.Length][];
-        for (var row = 0; row < copy.Length; row++)
-        {
-            copy[row] = new char[map[row].Length];
-            copy[row] = map[row].Select(x => x.ToString()[0]).ToArray();
-        }
-
-        foreach (var (position, direction) in path)
-        {
-            var c = direction switch
+            foreach (var nextState in NextStates(state, rules))
             {
-                Direction.Up => '^',
-                Direction.Right => '>',
-                Direction.Down => 'v',
-                Direction.Left => '<',
-                _ => throw new Exception("Invalid direction")
-            };
-            copy[position.Row][position.Col] = c;
+                if (InMap(map, nextState.Position) && !seen.Contains(nextState))
+                {
+                    seen.Add(nextState);
+                    queue.Enqueue(nextState, heatLoss + map[nextState.Position.Row][nextState.Position.Col]);
+                }
+            }
         }
 
-        foreach (var row in copy)
-        {
-            Console.WriteLine(new string(row));
-        }
-        Console.WriteLine();
-        Console.WriteLine(path.Select(x => x.Position).Select(p => map[p.Row][p.Col]).Sum());
-
-        Console.WriteLine();
-        Console.WriteLine("--------");
-        Console.WriteLine();
-
+        return int.MaxValue;
     }
 
-    public static void PrintMap(int[][] map)
+    public static IEnumerable<State> NextStates(State state, Rules rules)
     {
-        foreach(var line in map)
+        if (rules.CanMoveForward(state))
         {
-            Console.WriteLine(string.Join("", line.Select(x => x.ToString())));
+            yield return state with
+            {
+                Position = state.Position.Move(state.Direction),
+                DirectionMoves = state.DirectionMoves + 1
+            };
         }
-        Console.WriteLine();
-        Console.WriteLine("--------");
-        Console.WriteLine();
+
+        if (rules.CanTurn(state))
+        {
+            var leftDirection = state.Direction.TurnLeft();
+            yield return state with
+            {
+                Direction = leftDirection,
+                Position = state.Position.Move(leftDirection),
+                DirectionMoves = 1
+            };
+
+            var rightDirection = state.Direction.TurnRight();
+            yield return state with
+            {
+                Direction = rightDirection,
+                Position = state.Position.Move(rightDirection),
+                DirectionMoves = 1
+            };
+        }
     }
+
+    private static bool InMap(int[][] map, Position position)
+    {
+        var (row, col) = position;
+        return row >= 0 && row < map.Length && col >= 0 && col < map[0].Length;
+    }
+
 
     private static async Task<int[][]> Parse(string input)
     {
@@ -206,14 +139,26 @@ public enum Direction { Up, Right, Down, Left }
 
 public static class DirectionExtensions
 {
-    public static (Direction Left, Direction Straight, Direction Right) TurnDirections(this Direction direction)
+    public static Direction TurnLeft(this Direction direction)
     {
         return direction switch
         {
-            Direction.Up => (Direction.Left, Direction.Up, Direction.Right),
-            Direction.Right => (Direction.Up, Direction.Right, Direction.Down),
-            Direction.Down => (Direction.Right, Direction.Down, Direction.Left),
-            Direction.Left => (Direction.Down, Direction.Left, Direction.Up),
+            Direction.Up => Direction.Left,
+            Direction.Right => Direction.Up,
+            Direction.Down => Direction.Right,
+            Direction.Left => Direction.Down,
+            _ => throw new Exception("Unknown direction")
+        };
+    }
+
+    public static Direction TurnRight(this Direction direction)
+    {
+        return direction switch
+        {
+            Direction.Up => Direction.Right,
+            Direction.Right => Direction.Down,
+            Direction.Down => Direction.Left,
+            Direction.Left => Direction.Up,
             _ => throw new Exception("Unknown direction")
         };
     }
@@ -235,10 +180,11 @@ public record Position(int Row, int Col)
     }
 }
 
-public record State(Position Position, Direction LastDirection, int NumDirectionMoves, int HeatLoss, ImmutableArray<(Position, Direction)> Path)
-{
-    public SeenKey SeenKey => new SeenKey(Position, LastDirection, NumDirectionMoves);
-}
+public record State(Position Position, Direction Direction, int DirectionMoves);
 
-public record SeenKey(Position Position, Direction LastDirection, int NumDirectionMoves);
+public record Rules(
+    Func<State, bool> CanStop,
+    Func<State, bool> CanMoveForward,
+    Func<State, bool> CanTurn
+);
 
