@@ -1,5 +1,6 @@
 ﻿using System.Collections;
 using System.Collections.Frozen;
+using System.Collections.Immutable;
 using System.CommandLine;
 using System.Drawing;
 using System.Text;
@@ -43,92 +44,76 @@ public partial class Program
 
     private static Task Part1(IEnumerable<Instruction> instructions)
     {
-        var map = DigOutline(instructions);
-        map = DigInterior(map);
-        Console.WriteLine(map.Count);
+        var vertices = Vertices(instructions);
+        Console.WriteLine(Area(vertices));
         return Task.CompletedTask;
     }
 
     private static Task Part2(IEnumerable<Instruction> instructions)
     {
+        instructions = FixInstructions(instructions);
+        var vertices = Vertices(instructions);
+        Console.WriteLine(Area(vertices));
         return Task.CompletedTask;
     }
 
-    private static FrozenDictionary<Position, string> DigOutline(IEnumerable<Instruction> instructions)
+    private static long Perimiter(IReadOnlyList<Position> vertices)
     {
-        var dictionary = new Dictionary<Position, string>();
+        var verts = vertices.ToImmutableArray().Add(vertices[0]);
+        return Enumerable.Range(0, verts.Length - 1)
+            .Select(i => Math.Abs(verts[i].Row - verts[i + 1].Row) + Math.Abs(verts[i].Col - verts[i + 1].Col))
+            .Sum();
+    }
 
+    private static long Area(IReadOnlyList<Position> vertices)
+    {
+        // Shoelace formula
+        var verts = vertices.ToImmutableArray().Add(vertices[0]);
+        
+        var sum1 = Enumerable.Range(0, verts.Length - 1)
+            .Select(i => verts[i].Row * verts[i + 1].Col)
+            .Sum();
+
+        var sum2 = Enumerable.Range(0, verts.Length - 1)
+            .Select(i => verts[i].Col * verts[i + 1].Row)
+            .Sum();
+
+        var perimiter = Perimiter(vertices);
+
+        return (Math.Abs(sum1 - sum2) + perimiter) / 2 + 1;
+    }
+
+    private static ImmutableArray<Position> Vertices(IEnumerable<Instruction> instructions)
+    {
+        var vertices = new List<Position>();
         var current = new Position(0, 0);
-        dictionary[current] = "000000";
+        vertices.Add(current);
 
         foreach (var instruction in instructions)
         {
-            for (var i = 0; i < instruction.Distance; i++)
-            {
-                current = current.Move(instruction.Direction);
-                dictionary[current] = instruction.Color;
-            }
+            current = current.Move(instruction.Direction, instruction.Distance);
+            vertices.Add(current);
         }
 
-        return dictionary.ToFrozenDictionary();
+        return [.. vertices];
     }
 
-    private static FrozenDictionary<Position, string> DigInterior(IReadOnlyDictionary<Position, string> outline)
+    private static IEnumerable<Instruction> FixInstructions(IEnumerable<Instruction> original)
     {
-        var startPosition = FindStartPosition(outline);
-        var map = outline.ToDictionary();
-
-        var stack = new Stack<Position>();
-        stack.Push(startPosition);
-
-        while (stack.TryPop(out var current))
+        return original.Select(orig =>
         {
-            if (map.ContainsKey(current))
+            var distance = Convert.ToInt64(orig.Color[..5], 16);
+            var direction = orig.Color[^1] switch
             {
-                continue;
-            }
-            map[current] = "000000";
-            stack.Push(current.Move(Direction.Up));
-            stack.Push(current.Move(Direction.Right));
-            stack.Push(current.Move(Direction.Down));
-            stack.Push(current.Move(Direction.Left));
-        }
+                '0' => Direction.Right,
+                '1' => Direction.Down,
+                '2' => Direction.Left,
+                '3' => Direction.Up,
+                _ => throw new Exception("Unknown direction")
+            };
 
-        return map.ToFrozenDictionary();
-    }
-
-    private static Position FindStartPosition(IReadOnlyDictionary<Position, string> map)
-    {
-        var minRow = map.Keys.Min(p => p.Row);
-        var topPixels = map.Keys.Where(p => p.Row == minRow).OrderBy(p => p.Col);
-
-        // Find the first position that does not have a position downwards
-        return topPixels.First(p => !map.ContainsKey(p.Move(Direction.Down)))
-            .Move(Direction.Down);
-    }
-
-    private static void Print(IReadOnlyDictionary<Position, string> map)
-    {
-        var minRow = map.Keys.Min(p => p.Row);
-        var maxRow = map.Keys.Max(p => p.Row);
-        var minCol = map.Keys.Min(p => p.Col);
-        var maxCol = map.Keys.Max(p => p.Col);
-
-        var height = maxRow - minRow + 1;
-        var width = maxCol - minCol + 1;
-
-        for (var row = minRow; row <= maxRow; row++)
-        {
-            var sb = new StringBuilder();
-            for (var col = minCol; col <= maxCol; col++)
-            {
-                var position = new Position(row, col);
-                var c = map.ContainsKey(position) ? '#' : '.';
-                sb.Append(c);
-            }
-            Console.WriteLine(sb.ToString());
-        }
-
+            return new Instruction(direction, distance, string.Empty);
+        });
     }
 
     private static async Task<IEnumerable<Instruction>> Parse(string input)
@@ -153,7 +138,7 @@ public partial class Program
                     "L" => Direction.Left,
                     _ => throw new Exception("Unknown direction")
                 },
-                Distance: int.Parse(match.Groups["distance"].Value),
+                Distance: long.Parse(match.Groups["distance"].Value),
                 Color: match.Groups["color"].Value
             );
         });
@@ -165,19 +150,21 @@ public partial class Program
 
 public enum Direction { Up, Right, Down, Left }
 
-public record Position(int Row, int Col)
+public record Position(long Row, long Col)
 {
-    public Position Move(Direction direction)
+    public Position Move(Direction direction) => Move(direction, 1);
+
+    public Position Move(Direction direction, long distance)
     {
         return direction switch
         {
-            Direction.Up => this with { Row = Row - 1 },
-            Direction.Right => this with { Col = Col + 1 },
-            Direction.Down => this with { Row = Row + 1 },
-            Direction.Left => this with { Col = Col - 1},
+            Direction.Up => this with { Row = Row - distance },
+            Direction.Right => this with { Col = Col + distance },
+            Direction.Down => this with { Row = Row + distance },
+            Direction.Left => this with { Col = Col - distance },
             _ => throw new Exception("Unknown direction")
         };
     }
 }
 
-public record Instruction(Direction Direction, int Distance, string Color);
+public record Instruction(Direction Direction, long Distance, string Color);
