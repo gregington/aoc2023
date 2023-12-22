@@ -33,7 +33,7 @@ public partial class Program
         var task = part switch
         {
             1 => Part1(modules),
-            2 => Part2(),
+            2 => Part2(modules),
             _ => throw new ArgumentOutOfRangeException(nameof(part))
         };
 
@@ -51,9 +51,51 @@ public partial class Program
         return Task.CompletedTask;
     }
 
-    private static Task Part2()
+    private static Task Part2(FrozenDictionary<string, Module> modules)
     {
+        var bqModule = modules["bq"];
+        var inputsToWatch = bqModule.Inputs.ToFrozenSet();
+        var firstSeen = new Dictionary<string, int>();
+
+        var presses = 0;
+        while (inputsToWatch.Except(firstSeen.Keys).Any())
+        {
+            var signals = PushButton(modules);
+            presses++;
+            var firstSignals = signals
+                .Where(s => s.Pulse == Pulse.Low)
+                .Where(s => inputsToWatch.Contains(s.Receiver))
+                .Select(s => s.Receiver);
+
+            foreach (var x in firstSignals)
+            {
+                if (!firstSeen.ContainsKey(x))
+                {
+                    firstSeen[x] = presses;
+                }
+            }
+        }
+
+        var totalPresses = firstSeen.Values
+            .Select(x => Convert.ToInt64(x))
+            .Aggregate(Lcm);
+
+        Console.WriteLine(totalPresses);
+
         return Task.CompletedTask;
+    }
+
+    private static long Lcm(long x, long y) => x * y / Gcd(x, y);
+
+    private static long Gcd(long x, long y)
+    {
+        while (y != 0)
+        {
+            var temp = y;
+            y = x % y;
+            x = temp;
+        }
+        return x;
     }
 
     private static IEnumerable<Signal> PushButton(FrozenDictionary<string, Module> modules)
