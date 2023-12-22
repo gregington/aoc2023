@@ -1,10 +1,4 @@
-﻿using System.Collections.Frozen;
-using System.Collections.Immutable;
-using System.CommandLine;
-using System.Drawing;
-using System.IO;
-using System.Text.RegularExpressions;
-using Microsoft.VisualBasic;
+﻿using System.CommandLine;
 
 public partial class Program
 {
@@ -48,7 +42,7 @@ public partial class Program
 
         for (var i = 0; i < 64; i++)
         {
-            positions = StepMany(map, positions);
+            positions = positions.SelectMany(p => Step(map, p)).Distinct();
         }
         Console.WriteLine(positions.Count());
 
@@ -57,12 +51,56 @@ public partial class Program
 
     private static Task Part2(char[][] map, Position start)
     {
+        IEnumerable<Position> positions = new [] { start };
+
+        var totalSteps = 26501365;
+        var fullWidth = map[0].Length;
+        var halfWidth = fullWidth / 2;
+
+        var gridTraverals = (totalSteps - halfWidth) / fullWidth;
+        Console.WriteLine(gridTraverals);
+
+        // It takes half width steps to get to a new square, then
+        // increments of full width after that. Calculate the first three
+        // values of the sequence to get the formula
+
+        var firstTerms = Enumerable.Range(0, 3)
+            .Select(i => StepInfinite(map, start, i * fullWidth + halfWidth).Count())
+            .ToArray();
+
+        var (a, b, c) = QuadraticCoefficients(firstTerms);
+        Console.WriteLine($"{a}, {b}, {c}");
+
+        var numPositions = (a * gridTraverals * gridTraverals) + b * gridTraverals + c;
+        Console.WriteLine(numPositions);
+
         return Task.CompletedTask;
     }
 
-    private static IEnumerable<Position> StepMany(char[][] map, IEnumerable<Position> positions)
+    private static (long A, long B, long C) QuadraticCoefficients(int[] sequence)
     {
-        return positions.SelectMany(p => Step(map, p)).Distinct();
+        var a = (sequence[2] - (2 * sequence[1]) + sequence[0]) / 2;
+        var b = sequence[1] - sequence[0] - a;
+        var c = sequence[0];
+
+        return (a, b, c);
+    }
+
+    private static IEnumerable<Position> StepInfinite(char[][] map, Position start, int numSteps)
+    {
+        IEnumerable<Position> positions = new [] { start };
+
+        for (var i = 0; i < numSteps; i++)
+        {
+            positions = positions.SelectMany(p => StepInfinite(map, p)).Distinct().ToList();
+        }
+        return positions;
+    }
+
+    private static IEnumerable<Position> StepInfinite(char[][] map, Position position)
+    {
+        return CandidateSteps(position)
+            .Where(p => map[Mod(p.Row, map.Length)][Mod(p.Col, map[0].Length)] == '.');
     }
 
     private static IEnumerable<Position> Step(char[][] map, Position position)
@@ -95,6 +133,36 @@ public partial class Program
         {
             Console.WriteLine(new string(row));
         }
+    }
+
+    private static void PrintInfinite(char[][] map, IEnumerable<Position> positions)
+    {
+        var positionSet = positions.ToHashSet();
+
+        var minRow = Math.Min(0, positions.Select(p => p.Row).Min());
+        var maxRow = Math.Max(map.Length - 1, positions.Select(p => p.Row).Max());
+        var minCol = Math.Min(0, positions.Select(p => p.Col).Min());
+        var maxCol = Math.Max(map[0].Length - 1, positions.Select(p => p.Col).Max());
+
+        for (var row = minRow; row < maxRow + 1; row++)
+        {
+            for (var col = minCol; col < maxCol + 1; col++)
+            {
+                if (positionSet.Contains(new Position(row, col)))
+                {
+                    Console.Write('O');
+                }
+                else
+                {
+                    Console.Write(map[Mod(row, map.Length)][Mod(col, map[0].Length)]);
+                }
+            }
+            Console.WriteLine();
+        }
+    }
+
+    private static int Mod(int x, int m) {
+        return (x % m + m) % m;
     }
 
     private static char[][] CopyMap(char[][] map)
