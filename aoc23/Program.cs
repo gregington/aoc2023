@@ -1,4 +1,5 @@
-﻿using System.Collections.Immutable;
+﻿using System.Collections;
+using System.Collections.Immutable;
 using System.CommandLine;
 using System.Runtime.Versioning;
 
@@ -48,7 +49,113 @@ public partial class Program
 
     private static Task Part2(char[][] map)
     {
+        map = RemoveSlopes(map);
+        var start = FindStart(map);
+        var end = FindEnd(map);
+
+        var branches = FindBranches(map);
+        var nodeMap = CreateNodeCosts(map, branches);
+
+        var maxSteps = FindMaxSteps(nodeMap, end, start, [], 0);
+
+        Console.WriteLine(maxSteps);
+
         return Task.CompletedTask;
+    }
+
+    private static int FindMaxSteps(Dictionary<Position, Dictionary<Position, int>> costs, Position goal, Position position, ImmutableHashSet<Position> visited, int cost)
+    {
+        if (position == goal)
+        {
+            return cost;
+        }
+
+        visited = visited.Add(position);
+        var maxCost = int.MinValue;
+        var destinations = costs[position];
+        foreach (var (destination, traversalCost) in destinations)
+        {
+            if (visited.Contains(destination))
+            {
+                continue;
+            }
+            var newCost = FindMaxSteps(costs, goal, destination, visited, cost + traversalCost);
+            maxCost = Math.Max(maxCost, newCost);
+        }
+        return maxCost;
+    }
+
+    private static Dictionary<Position, Dictionary<Position, int>> CreateNodeCosts(char[][] map, IEnumerable<(Position Position, HashSet<Direction> Direction)> nodes)
+    {
+        var costs = nodes.Select(n => n.Position)
+            .ToDictionary(p => p, _ => new Dictionary<Position, int>());
+
+        var nodeSet = costs.Keys.ToHashSet();
+
+        foreach (var (node, startDirection) in nodes.SelectMany(n => n.Direction.Select(d => (n.Position, d))))
+        {
+            var firstStep = node.Move(startDirection);
+            var (nextNode, steps) = FindNextNode(map, firstStep, [node], nodeSet);
+            costs[node][nextNode] = steps;
+        }
+        return costs;
+    }
+
+    private static (Position, int) FindNextNode(char[][] map, Position position, HashSet<Position> visited, HashSet<Position> nodeSet)
+    {
+        if (nodeSet.Contains(position))
+        {
+            return (position, visited.Count);
+        }
+
+        visited.Add(position);
+        var newPositions = NewPositions(map, position, visited);
+        var newPosition = newPositions.Single(); // we should only have one path
+        return FindNextNode(map, newPosition, visited, nodeSet);
+    }
+
+    private static IEnumerable<(Position Position, HashSet<Direction> Directions)> FindBranches(char[][] map)
+    {
+        // Start and end are special
+        var start = FindStart(map);
+        yield return (start, new HashSet<Direction>{Direction.Down});
+
+        var end = FindEnd(map);
+        yield return (end, new HashSet<Direction>{Direction.Up});
+
+        for (var row = 0; row < map.Length; row++)
+        {
+            for (var col = 0; col < map[row].Length; col++)
+            {
+                var position = new Position(row, col);
+                if (HasThreeOrMorePathNeighbors(map, position, out var directions))
+                {
+                    yield return (position, directions);
+                }
+            }
+        }
+    }
+
+    private static bool HasThreeOrMorePathNeighbors(char[][] map, Position position, out HashSet<Direction> directions)
+    {
+        directions = [];
+        if (map[position.Row][position.Col] == '#')
+        {
+            return false;
+        }
+        var directions2 =  Enum.GetValues<Direction>()
+            .Select(direction => (Direction: direction, NewPosition: position.Move(direction)))
+            .Where(p => InBounds(map, p.NewPosition))
+            .Where(p => map[p.NewPosition.Row][p.NewPosition.Col] is '.' or '^' or '>' or 'v' or '<')
+            .Select(p => p.Direction)
+            .ToHashSet();
+
+        if (directions2.Count >= 3)
+        {
+            directions = directions2;
+            return true;
+        }
+        return false;
     }
 
     private static int FindMaxSteps(char[][] map)
@@ -57,6 +164,18 @@ public partial class Program
         var end = FindEnd(map);
 
         return FindMaxSteps(map, end, start, []);
+    }
+
+    private static char[][] RemoveSlopes(char[][] map)
+    {
+        return map.Select(line => line.Select(c => c switch
+        {
+            '^' => '.',
+            '>' => '.',
+            'v' => '.',
+            '<' => '.',
+            _ => c
+        }).ToArray()).ToArray();
     }
 
     private static int FindMaxSteps(char[][] map, Position goal, Position position, ImmutableHashSet<Position> visited)
