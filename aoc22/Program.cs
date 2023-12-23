@@ -31,7 +31,7 @@ public partial class Program
         var task = part switch
         {
             1 => Part1(blocks),
-            2 => Part2(),
+            2 => Part2(blocks),
             _ => throw new ArgumentOutOfRangeException(nameof(part))
         };
 
@@ -41,7 +41,6 @@ public partial class Program
     private static Task Part1(List<Block> blocks)
     {
         var droppedBlocks = DropAll(blocks);
-        Console.WriteLine();
         Print(droppedBlocks);
 
         var disintegratableBlocks = FindDisintegratableBlocks(droppedBlocks);
@@ -50,8 +49,39 @@ public partial class Program
         return Task.CompletedTask;
     }
 
-    private static Task Part2()
+    private static Task Part2(List<Block> blocks)
     {
+        var droppedBlocks = DropAll(blocks).OrderBy(x => x.Id).ToList();
+        var (blocksAbove, blocksBelow) = CreateAdjacencies(droppedBlocks);
+
+        var results = new List<int>();
+
+        foreach (var block in droppedBlocks)
+        {
+            var queue = new Queue<int>();
+            queue.Enqueue(block.Id);
+
+            var falling = new HashSet<int>();
+            while (queue.TryDequeue(out var blockId))
+            {
+                falling.Add(blockId);
+
+                var additionalFalling =
+                    from blockT in blocksAbove[blockId]
+                    where blocksBelow[blockT].IsSubsetOf(falling)
+                    select blockT;
+
+                foreach (var b in additionalFalling)
+                {
+                    queue.Enqueue(b);
+                }
+            }
+
+            results.Add(falling.Count - 1); // exclude original block
+        }
+
+        Console.WriteLine(results.Sum());
+
         return Task.CompletedTask;
     }
 
@@ -61,6 +91,43 @@ public partial class Program
         {
             Console.WriteLine(block);
         }
+    }
+
+    private static (Dictionary<int, HashSet<int>> BlocksAbove, Dictionary<int, HashSet<int>> BlocksBelow) CreateAdjacencies(List<Block> blocks)
+    {
+        blocks = blocks.OrderBy(b => b.MinZ).ToList();
+        var blocksAbove = blocks.ToDictionary(b => b.Id, _ => new HashSet<int>());
+        var blocksBelow = blocks.ToDictionary(b => b.Id, _ => new HashSet<int>());
+
+        for (var i = 0; i < blocks.Count; i++)
+        {
+            for (var j = i + 1; j < blocks.Count; j++)
+            {
+                if (blocks[j].Drop().Voxels.Intersect(blocks[i].Voxels).Any())
+                {
+                    blocksBelow[blocks[j].Id].Add(blocks[i].Id);
+                    blocksAbove[blocks[i].Id].Add(blocks[j].Id);
+                }
+            }
+        }
+        return (blocksAbove, blocksBelow);
+    }
+
+    private static HashSet<int>[] SupportMap(IEnumerable<Block> blocks, IReadOnlyDictionary<Voxel, Block> voxelToBlock)
+    {
+        var result = blocks.Select(_ => new HashSet<int>()).ToArray();
+        foreach (var block in blocks)
+        {
+            var blockUp = block.Drop();
+            result[block.Id] = blockUp.Voxels
+                .Select(v => voxelToBlock.TryGetValue(v, out var block) ? block.Id as int? : null)
+                .Where(x => x != null)
+                .Select(x => (int) x!)
+                .Where(x => x != block.Id)
+                .ToHashSet();
+        }
+
+        return result;        
     }
 
     private static List<Block> FindDisintegratableBlocks(List<Block> blocks)
