@@ -1,0 +1,19 @@
+{
+	"name": "AOC 2023",
+	"image": "mcr.microsoft.com/devcontainers/base:ubuntu",
+
+	"features": {
+		"ghcr.io/devcontainers/features/sshd:1": {
+			"version": "latest"
+		},
+		"ghcr.io/devcontainers/features/dotnet:1": {
+			"version": "8",
+			"installUsingApt": false
+		}
+	},
+
+	"postCreateCommand": "sudo apt update && sudo apt -y install z3",	
+
+	// Comment out to connect as root instead. More info: https://aka.ms/vscode-remote/containers/non-root.
+	"remoteUser": "vscode"
+}

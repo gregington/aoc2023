@@ -1,5 +1,6 @@
 ﻿using System.Collections.Immutable;
 using System.CommandLine;
+using System.Numerics;
 using System.Text.RegularExpressions;
 using Microsoft.Z3;
 
@@ -92,31 +93,39 @@ public partial class Program
     private static Task Part2(IReadOnlyList<Hailstone> hailstones)
     {
         using var ctx = new Context(new Dictionary<string, string> { ["model"] = "true" });
+        var solver = ctx.MkSolver();
 
-        var x = ctx.MkInt("x");
-        var y = ctx.MkInt("y");
-        var z = ctx.MkInt("z");
-        var vx = ctx.MkInt("vx");
-        var vy = ctx.MkInt("vy");
-        var vz = ctx.MkInt("vz");
+        var x = ctx.MkIntConst("x");
+        var y = ctx.MkIntConst("y");
+        var z = ctx.MkIntConst("z");
+        var vx = ctx.MkIntConst("vx");
+        var vy = ctx.MkIntConst("vy");
+        var vz = ctx.MkIntConst("vz");
 
         // Take the first three hailstones
         for (var i = 0; i < 3; i++)
         {
             var hailstone = hailstones[i];
 
-            var (hpx, hpy, hpz) = hailstone.Position;
-            var (hvx, hvy, hvz) = hailstone.Velocity;
+            // var (hpx, hpy, hpz) = hailstone.Position;
+            // var (hvx, hvy, hvz) = hailstone.Velocity;
 
-            var t = ctx.MkInt($"t{i}");
-            ctx.MkGe(t, ctx.MkInt(0));
+            var t = ctx.MkIntConst($"t{i}");
 
-            ctx.MkEq(ctx.MkAdd(x, ctx.MkMul(vx, t)), ctx.MkAdd(ctx.MkInt((int) hpx), ctx.MkMul(ctx.MkInt((int) hvx), t)));
-            ctx.MkEq(ctx.MkAdd(y, ctx.MkMul(vy, t)), ctx.MkAdd(ctx.MkInt((int) hpy), ctx.MkMul(ctx.MkInt((int) hvy), t)));
-            ctx.MkEq(ctx.MkAdd(z, ctx.MkMul(vz, t)), ctx.MkAdd(ctx.MkInt((int) hpz), ctx.MkMul(ctx.MkInt((int) hvz), t)));
+            var hpx = ctx.MkInt(Convert.ToInt64(hailstone.Position.X));
+            var hpy = ctx.MkInt(Convert.ToInt64(hailstone.Position.Y));
+            var hpz = ctx.MkInt(Convert.ToInt64(hailstone.Position.Z));
+
+            var hvx = ctx.MkInt(Convert.ToInt64(hailstone.Velocity.X));
+            var hvy = ctx.MkInt(Convert.ToInt64(hailstone.Velocity.Y));
+            var hvz = ctx.MkInt(Convert.ToInt64(hailstone.Velocity.Z));
+
+            solver.Add(t >= 0);
+            solver.Add(ctx.MkEq(ctx.MkAdd(x, ctx.MkMul(vx, t)), ctx.MkAdd(hpx, ctx.MkMul(hvx, t))));
+            solver.Add(ctx.MkEq(ctx.MkAdd(y, ctx.MkMul(vy, t)), ctx.MkAdd(hpy, ctx.MkMul(hvy, t))));
+            solver.Add(ctx.MkEq(ctx.MkAdd(z, ctx.MkMul(vz, t)), ctx.MkAdd(hpz, ctx.MkMul(hvz, t))));
         }
 
-        var solver = ctx.MkSolver();
 
         if (solver.Check() != Status.SATISFIABLE)
         {
@@ -128,9 +137,8 @@ public partial class Program
         var ey = model.Double(model.Eval(y));
         var ez = model.Double(model.Eval(z));
 
-        Console.WriteLine("${ex}, ${ey}, ${ez}");
-
-            
+        Console.WriteLine($"{ex}, {ey}, {ez}");
+        Console.WriteLine(ex + ey + ez);
 
         return Task.CompletedTask;
     }
