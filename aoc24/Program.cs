@@ -1,6 +1,7 @@
 ﻿using System.Collections.Immutable;
 using System.CommandLine;
 using System.Text.RegularExpressions;
+using Microsoft.Z3;
 
 public partial class Program
 {
@@ -90,6 +91,47 @@ public partial class Program
 
     private static Task Part2(IReadOnlyList<Hailstone> hailstones)
     {
+        using var ctx = new Context(new Dictionary<string, string> { ["model"] = "true" });
+
+        var x = ctx.MkInt("x");
+        var y = ctx.MkInt("y");
+        var z = ctx.MkInt("z");
+        var vx = ctx.MkInt("vx");
+        var vy = ctx.MkInt("vy");
+        var vz = ctx.MkInt("vz");
+
+        // Take the first three hailstones
+        for (var i = 0; i < 3; i++)
+        {
+            var hailstone = hailstones[i];
+
+            var (hpx, hpy, hpz) = hailstone.Position;
+            var (hvx, hvy, hvz) = hailstone.Velocity;
+
+            var t = ctx.MkInt($"t{i}");
+            ctx.MkGe(t, ctx.MkInt(0));
+
+            ctx.MkEq(ctx.MkAdd(x, ctx.MkMul(vx, t)), ctx.MkAdd(ctx.MkInt((int) hpx), ctx.MkMul(ctx.MkInt((int) hvx), t)));
+            ctx.MkEq(ctx.MkAdd(y, ctx.MkMul(vy, t)), ctx.MkAdd(ctx.MkInt((int) hpy), ctx.MkMul(ctx.MkInt((int) hvy), t)));
+            ctx.MkEq(ctx.MkAdd(z, ctx.MkMul(vz, t)), ctx.MkAdd(ctx.MkInt((int) hpz), ctx.MkMul(ctx.MkInt((int) hvz), t)));
+        }
+
+        var solver = ctx.MkSolver();
+
+        if (solver.Check() != Status.SATISFIABLE)
+        {
+            throw new Exception("Not satisfiable");
+        }
+        var model = solver.Model;
+
+        var ex = model.Double(model.Eval(x));
+        var ey = model.Double(model.Eval(y));
+        var ez = model.Double(model.Eval(z));
+
+        Console.WriteLine("${ex}, ${ey}, ${ez}");
+
+            
+
         return Task.CompletedTask;
     }
 
